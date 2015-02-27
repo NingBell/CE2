@@ -7,6 +7,8 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <vector>
+#include <algorithm>
 #include "TextBuddy.h"
 
 using namespace std;
@@ -17,9 +19,13 @@ const string MESSAGE_ADDED = "added to %s: \"%s\"";
 const string MESSAGE_DELETED = "deleted from %s: \"%s\"";
 const string MESSAGE_CLEARED = "all content deleted from %s";
 const string MESSAGE_INVALID_FORMAT = "invalid command format";
+const string MESSAGE_SORTED = "all content in %s are sorted alphabetically";
+const string MESSAGE_NOTFOUND = "word not found in %s";
 
 const int INITIAL_LINENUMBER = 1;
-char buffer[300];
+char buffer[500];
+vector<string> store;
+vector<string> rightLines;
 
 int main(int argc, char* argv[]){
 	string fileName;
@@ -42,11 +48,10 @@ int main(int argc, char* argv[]){
 
 	return 0;
 }
-fdsafdsa;
 
-void TextBuddy::displayWelcomeMessage(string fileName) {
+string TextBuddy::displayWelcomeMessage(string fileName) {
 	sprintf_s(buffer, MESSAGE_START.c_str(), fileName.c_str());
-	cout << buffer << endl;
+	return buffer;
 }
 
 //This method is to determine the command type so that the userCommand is ready for further processing
@@ -63,6 +68,12 @@ TextBuddy::CommandType TextBuddy::determineCommandType(string command) {
 	else if (command == "clear") {
 		return CLEAR_ALL;
 	}
+	else if (command == "sort"){
+		return SORT;
+	}
+	else if (command == "search"){
+		return SEARCH;
+	}
 	else if (command == "exit") {
 		return EXIT;
 	}
@@ -71,7 +82,7 @@ TextBuddy::CommandType TextBuddy::determineCommandType(string command) {
 }
 
 //This method takes in user command and then process it accordingly
-void TextBuddy::exercuteUserCommand(string fileName, string userCommand) {
+string TextBuddy::exercuteUserCommand(string fileName, string userCommand) {
 	CommandType CommandType;
 	string content;
 	
@@ -91,13 +102,19 @@ void TextBuddy::exercuteUserCommand(string fileName, string userCommand) {
 		
 		case CLEAR_ALL:
 			return clearAll(fileName);
+
+		case SORT:
+			return sortAlphabetical(fileName);
+
+		case SEARCH:
+			return searchWord(fileName, content);
 		
 		case EXIT:
 			exit(0);
 		
 		case INVALID:
 			sprintf_s(buffer, MESSAGE_INVALID_FORMAT.c_str());
-		    cout << buffer <<endl;
+		    return buffer;
 		
 		default:
 			break;
@@ -120,18 +137,18 @@ string TextBuddy::getContent(string userCommand){
 }
 
 //This method is to add in new information to the file and then tell the user that the content is added
-void TextBuddy::addContent(string fileName, string content){
+string TextBuddy::addContent(string fileName, string content){
 	ofstream file;
 	file.open(fileName, ios::app);
 	file << content <<endl;
 	file.close();
     
 	sprintf_s(buffer, MESSAGE_ADDED.c_str(), fileName.c_str(), content.c_str());
-	cout << buffer << endl;
+	return buffer;
 }
 
 //This method is to show all the information in the file and empty if nothing is inside the file
-void TextBuddy::displayAll(string fileName){
+string TextBuddy::displayAll(string fileName){
 	ifstream file;
 	file.open(fileName);
 
@@ -145,16 +162,16 @@ void TextBuddy::displayAll(string fileName){
 
 	if(lineNumber == INITIAL_LINENUMBER){
 		sprintf_s(buffer, MESSAGE_EMPTY.c_str(), fileName.c_str());
-		cout << buffer << endl;
+		return buffer;
 	}
 
 	file.close();
 
-	return;
+	return"";
 }
 
 //This method is to delete a certain information that provided by the user and then tell user that it is deleted
-void TextBuddy::deleteContent(string fileName, string content){
+string TextBuddy::deleteContent(string fileName, string content){
 	int lineNumber = stoi(content);
 	
 	ifstream originalFile;
@@ -184,11 +201,11 @@ void TextBuddy::deleteContent(string fileName, string content){
 	rename("TFile.txt", fileName.c_str());
 	
 	sprintf_s(buffer, MESSAGE_DELETED.c_str(), fileName.c_str(), deletedLine.c_str());
-    cout << buffer << endl;
+    return buffer;
 }
 
 //This method is to clear all the information in the file
-void TextBuddy::clearAll(string fileName){
+string TextBuddy::clearAll(string fileName){
 	ifstream file;
 	file.open("TFile.txt");
 	file.close();
@@ -197,5 +214,104 @@ void TextBuddy::clearAll(string fileName){
 	rename("TFile.txt", fileName.c_str());
 	
 	sprintf_s(buffer, MESSAGE_CLEARED.c_str(), fileName.c_str());
-    cout << buffer << endl;
+    return buffer;
+}
+
+//This method is to sort the content alphabetically
+//First change file to vector and then back to file
+string TextBuddy::sortAlphabetical(string fileName){
+	TextBuddy::storeFileinVector(fileName);
+	
+	stable_sort(store.begin(), store.end());
+
+	TextBuddy::writeToFile(fileName);
+
+	sprintf_s(buffer, MESSAGE_SORTED.c_str(), fileName.c_str());
+	return buffer;
+}
+
+//This method is to store the content of file in a vector
+void TextBuddy::storeFileinVector(string fileName){
+	ifstream file;
+	string Tline;
+
+	file.open(fileName);
+
+	while (getline(file, Tline)) {
+		store.push_back(Tline);
+	}
+
+	file.close();
+	return;
+}
+
+// This method is to convert strings in vector back to file
+void TextBuddy::writeToFile(string filename) {
+	ofstream file;
+
+	file.open(filename);
+	file.close();
+	
+	for (vector<string>::iterator Tcount = store.begin(); Tcount != store.end(); Tcount++) {
+		file.open(filename, ios::app);
+		file << *Tcount << endl;
+		file.close();
+	}
+
+	return;
+}
+
+//This method is to search the word in the file
+//If found, the lines containing the word will be printed out
+//If not found, a message showing not found will be printed out
+string TextBuddy::searchWord(string fileName, string word){
+	TextBuddy::storeFileinVector(fileName);
+
+	bool isFound = TextBuddy::getRightLines(store, word);
+
+	if(isFound){
+		TextBuddy::printRightLines(rightLines);
+	}else {
+		sprintf_s(buffer, MESSAGE_NOTFOUND.c_str(), fileName.c_str());
+		return buffer;
+	}
+
+	return"";
+}
+
+//This method is to check what are the lines contain the word if any
+bool TextBuddy::getRightLines(vector<string> store, string word){
+	bool isFound = false;
+	int Tindex;
+
+	for (Tindex = 0; Tindex < store.size(); Tindex++){
+		if(isContainingWord(store[Tindex], word)){
+			isFound = true;
+			rightLines.push_back(store[Tindex]);
+		}
+	}
+
+	return isFound;
+}
+
+//This method is to check whether a certain line contains the word
+bool TextBuddy::isContainingWord(string line, string word){
+	bool isContaining = false;
+
+	if(line.find(word) != string::npos){
+		isContaining = true;
+	}
+
+	return isContaining;
+}
+
+//This method is to print out the lines contain the word
+void TextBuddy::printRightLines(vector<string> rightLines){
+	int Tindex;
+
+	for(Tindex = 0; Tindex < rightLines.size(); Tindex++){
+		cout << "word found in: " << rightLines[Tindex] << endl;
+	}
+
+	return;
 }
